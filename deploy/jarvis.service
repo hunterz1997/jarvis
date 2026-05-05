@@ -1,0 +1,20 @@
+[Unit]
+Description=Jarvis AI Agent (FastAPI)
+After=network.target jarvis-wa.service
+Wants=jarvis-wa.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/jarvis
+ExecStart=/opt/jarvis/.venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/jarvis/logs/jarvis.log
+StandardError=append:/opt/jarvis/logs/jarvis.log
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- EMERGENCY RESET: visit /?reset to wipe ALL caches + service workers + localStorage. -->
+  <script>
+    (function () {
+      if (!window.location.search.match(/[?&]reset(=|&|$)/)) return;
+      var done = function () {
+        try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}
+        // Land on the bare URL with a cache-bust so the next load is fresh
+        window.location.replace('/?fresh=' + Date.now());
+      };
+      var jobs = [];
+      if ('caches' in window) {
+        jobs.push(caches.keys().then(function (ks) {
+          return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+        }));
+      }
+      if (navigator.serviceWorker) {
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+          return Promise.all(rs.map(function (r) { return r.unregister(); }));
+        }));
+      }
+      Promise.all(jobs).then(done, done);
+      document.write('<div style="font:18px sans-serif;padding:40px;text-align:center;color:#d97706;">Resetting Jarvis cache &amp; service worker… page will reload automatically.</div>');
+    })();
+  </script>
+  <title>J.A.R.V.I.S</title>
+  <link rel="manifest" href="/static/manifest.webmanifest" />
+  <meta name="theme-color" content="#d97706" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="JARVIS" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="/static/jarvis_icon.ico" />
+  <link rel="stylesheet" href="/static/style.css?v=20260429k" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- ═══ Voice mode picker (which mode: voice-only or voice+camera) ══════════ -->
+  <div class="voice-picker" id="voicePicker" style="display:none">
+    <div class="voice-picker-card">
+      <div class="voice-picker-title">CHOOSE VOICE MODE</div>
+      <div class="voice-picker-grid">
+        <button class="voice-picker-btn" data-mode="voice">
+          <div class="voice-picker-icon">🎙️</div>
+          <div class="voice-picker-name">VOICE ONLY</div>
+          <div class="voice-picker-desc">Mic + reactor only · No camera</div>
+        </button>
+        <button class="voice-picker-btn" data-mode="voice-cam">
+          <div class="voice-picker-icon">🎙️📷</div>
+          <div class="voice-picker-name">VOICE + CAMERA</div>
+          <div class="voice-picker-desc">Show Jarvis what you're holding</div>
+        </button>
+      </div>
+      <label class="voice-picker-remember">
+        <input type="checkbox" id="voicePickerRemember"> Always use this (don't ask again)
+      </label>
+      <button class="voice-picker-cancel" id="voicePickerCancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═══ Voice mode overlay (Tony Stark arc reactor) ═════════════════════════ -->
+  <div class="voice-overlay" id="voiceOverlay" style="display:none" data-camera="off">
+    <div class="voice-bg-grid"></div>
+    <!-- Left half: arc reactor + status -->
+    <div class="voice-pane voice-pane-left">
+      <div class="voice-reactor" id="voiceReactor" data-voice-state="idle" title="Click to interrupt">
+        <div class="voice-ring voice-ring-1"></div>
+        <div class="voice-ring voice-ring-2"></div>
+        <div class="voice-ring voice-ring-3"></div>
+        <div class="voice-core"></div>
+      </div>
+      <div class="voice-status">
+        <div class="voice-status-main"  id="voiceStatusMain">LISTENING…</div>
+        <div class="voice-status-detail" id="voiceStatusDetail">Click reactor to interrupt · Esc to exit</div>
+      </div>
+      <div class="voice-gesture-hint" id="voiceGestureHint" style="display:none">
+        <span>✋ mute</span><span>👊 stop</span><span>✌️ exit</span>
+        <span>👍 yes</span><span>👎 no</span><span>☝️ snapshot</span>
+      </div>
+    </div>
+    <!-- Right half: camera + hand-skeleton overlay (only shown in voice+cam mode) -->
+    <div class="voice-pane voice-pane-right">
+      <div class="voice-camera-frame">
+        <video id="voiceCameraVideo" autoplay muted playsinline></video>
+        <canvas id="voiceGestureCanvas"></canvas>
+        <div class="voice-cam-corners">
+          <div class="voice-cam-corner voice-cam-tl"></div>
+          <div class="voice-cam-corner voice-cam-tr"></div>
+          <div class="voice-cam-corner voice-cam-bl"></div>
+          <div class="voice-cam-corner voice-cam-br"></div>
+        </div>
+        <div class="voice-cam-label" id="voiceCamLabel">CAMERA · LIVE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Face-scan login overlay (optional, opt-in) ══════════════════════════ -->
+  <div class="face-login-overlay" id="faceLoginOverlay" style="display:none">
+
+    <!-- Stage: loading face-recognition models -->
+    <div class="face-stage" data-stage="loading" style="display:flex">
+      <div class="face-card">
+        <div class="face-spinner"></div>
+        <div class="face-title">INITIALIZING OPTICS</div>
+        <div class="face-subtitle" id="faceLoadText">LOADING MODELS…</div>
+        <div class="face-progress-bar"><div class="face-progress-fill" id="faceLoadFill"></div></div>
+      </div>
+    </div>
+
+    <!-- Stage: enrollment intro -->
+    <div class="face-stage" data-stage="enroll-intro" style="display:none">
+      <div class="face-card">
+        <div class="face-title">FIRST-TIME SETUP</div>
+        <div class="face-subtitle">I need to learn your face.</div>
+        <p class="face-body">
+          When you click <b>Begin Enrollment</b>, I'll use your webcam to capture
+          5 reference frames. Stay in frame for 8–10 seconds. Your face data
+          stays on this device — never uploaded.
+        </p>
+        <div class="face-btns">
+          <button class="face-btn face-btn-primary" id="faceEnrollBegin">Begin Enrollment</button>
+          <button class="face-btn face-btn-secondary" id="faceEnrollSkip">Skip</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stage: mode picker -->
+    <div class="face-stage" data-stage="mode" style="display:none">
+      <div class="face-card">
+        <div class="face-title">CHOOSE LOGIN MODE</div>
+        <div class="face-mode-grid">
+          <button class="face-mode-btn" id="faceModeSecure">
+            <div class="face-mode-icon">🔒</div>
+            <div class="face-mode-name">SECURE</div>
+            <div class="face-mode-desc">Owner only · denies others</div>
+          </button>
+          <button class="face-mode-btn" id="faceModePublic">
+            <div class="face-mode-icon">🌐</div>
+            <div class="face-mode-name">PUBLIC</div>
+            <div class="face-mode-desc">Anyone welcome · greets by name</div>
+          </button>
+        </div>
+        <button class="face-btn-link" id="faceModeSkip">Skip face scan</button>
+      </div>
+    </div>
+
+    <!-- Stage: live camera scan -->
+    <div class="face-stage" data-stage="scan" style="display:none">
+      <div class="face-camera-wrap">
+        <video id="faceVideo" autoplay muted playsinline></video>
+        <canvas id="faceCanvas"></canvas>
+        <div class="face-hud-corners">
+          <div class="face-hud-corner face-hud-tl"></div>
+          <div class="face-hud-corner face-hud-tr"></div>
+          <div class="face-hud-corner face-hud-bl"></div>
+          <div class="face-hud-corner face-hud-br"></div>
+        </div>
+        <div class="face-hud-reticle"></div>
+      </div>
+      <div class="face-scan-text">
+        <div class="face-status-main"  id="faceStatusText">SCANNING…</div>
+        <div class="face-status-detail" id="faceStatusDetail">OPTICAL SCAN ACTIVE</div>
+      </div>
+    </div>
+
+    <!-- Stage: success -->
+    <div class="face-stage" data-stage="welcome" style="display:none">
+      <div class="face-card face-card-success">
+        <div class="face-checkmark">✓</div>
+        <div class="face-welcome" id="faceWelcomeText">WELCOME, PREM</div>
+        <div class="face-subtitle">BIOMETRIC MATCH CONFIRMED</div>
+      </div>
+    </div>
+
+    <!-- Stage: denied (secure mode) -->
+    <div class="face-stage" data-stage="denied" style="display:none">
+      <div class="face-card face-card-denied">
+        <div class="face-x">✗</div>
+        <div class="face-title">ACCESS DENIED</div>
+        <div class="face-subtitle">No authorized user detected within 60 seconds.</div>
+        <button class="face-btn face-btn-secondary" id="faceDeniedSkip">Cancel and use Jarvis anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boot animation overlay REMOVED — caused too many edge-case issues -->
+
+
+  <!-- ═══ Gesture-only mode PIP (camera + hand tracking, navigation gestures) ═ -->
+  <div class="gesture-pip" id="gesturePip" style="display:none">
+    <div class="gesture-pip-frame">
+      <video id="gesturePipVideo" autoplay muted playsinline></video>
+      <canvas id="gesturePipCanvas"></canvas>
+      <div class="gesture-pip-label">GESTURE MODE</div>
+      <button class="gesture-pip-close" id="gesturePipClose" title="Exit gesture mode">×</button>
+    </div>
+    <div class="gesture-pip-hint">
+      <span>← swipe close · swipe → open</span>
+      <span>☝️ draw "S" for settings</span>
+    </div>
+  </div>
+
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="orb orb-4"></div>
+    <div class="orb orb-5"></div>
+  </div>
+
+  <!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="jarvis-logo">
+        <div class="arc-reactor">
+          <div class="arc-ring arc-ring-1"></div>
+          <div class="arc-ring arc-ring-2"></div>
+          <div class="arc-core"></div>
+        </div>
+        <div class="logo-text">
+          <span class="logo-main">J.A.R.V.I.S</span>
+          <span class="logo-sub">SYSTEM ONLINE</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section-label">QUICK ACTIONS</div>
+    <nav class="quick-actions">
+      <button class="action-btn" data-prompt="What are my upcoming calendar events for the next 7 days?">
+        <span class="action-icon">📅</span>
+        <span>My Calendar</span>
+      </button>
+      <button class="action-btn" data-prompt="Read my Gmail inbox — show me the latest 10 emails.">
+        <span class="action-icon">📧</span>
+        <span>Check Emails</span>
+      </button>
+      <button class="action-btn" data-prompt="Show me my recent WhatsApp chats.">
+        <span class="action-icon">💬</span>
+        <span>WhatsApp</span>
+      </button>
+      <button class="action-btn" data-prompt="Search for the latest GST news in India today and summarize the top 3 updates.">
+        <span class="action-icon">🔍</span>
+        <span>GST News</span>
+      </button>
+      <button class="action-btn" data-prompt="I want to order food.">
+        <span class="action-icon">🍕</span>
+        <span>Order Food</span>
+      </button>
+      <button class="action-btn" data-prompt="Show me my LinkedIn dashboard — profile summary, recent posts, and engagement analytics.">
+        <span class="action-icon">💼</span>
+        <span>LinkedIn</span>
+      </button>
+      <button class="action-btn" data-prompt="Show me what files I've worked on recently — search my Documents and Desktop for files modified in the last 7 days.">
+        <span class="action-icon">📁</span>
+        <span>Recent Files</span>
+      </button>
+      <button class="action-btn" data-prompt="Show me my system status — RAM, CPU, disk space, and top processes.">
+        <span class="action-icon">🖥</span>
+        <span>System Status</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-section-label" style="margin-top:24px">RECENT SESSIONS</div>
+    <div class="session-list" id="sessionList">
+      <div class="session-empty">No previous sessions</div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="status-row">
+        <div class="status-dot" id="wsStatusDot"></div>
+        <span id="wsStatusText" class="status-text">Connecting…</span>
+      </div>
+      <button class="new-chat-btn" id="newChatBtn">+ New Session</button>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════ MAIN CHAT ═══════════════════════════════ -->
+  <main class="chat-container">
+    <header class="chat-header">
+      <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+      <div class="header-center">
+        <h1 class="header-title">J.A.R.V.I.S</h1>
+        <span class="header-subtitle">Just A Rather Very Intelligent System</span>
+      </div>
+      <div class="header-right">
+        <div class="model-badge" id="modelBadge">
+          <span class="model-dot"></span>
+          <span id="modelName">Sonnet</span>
+        </div>
+        <div class="credits-widget" id="creditsWidget" title="Click to set total Anthropic credits">
+          <span class="credits-icon">💳</span>
+          <span id="creditsText">—</span>
+        </div>
+        <button class="notif-bell" id="notifBell" title="Scheduled notifications" onclick="messageInput.value='List my scheduled tasks'; sendBtn.disabled=false; sendMessage();">
+          🔔
+        </button>
+        <button class="mic-btn" id="micBtn" title="Voice mode (toggle)">🎙️</button>
+        <button class="gesture-btn" id="gestureBtn" title="Gesture-only mode (camera, no voice)">✋</button>
+        <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
+        <div class="conn-indicator" id="connIndicator">
+          <div class="conn-pulse"></div>
+          <span>LIVE</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Message area -->
+    <div class="messages-area" id="messagesArea">
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-arc">
+          <div class="arc-reactor large">
+            <div class="arc-ring arc-ring-1"></div>
+            <div class="arc-ring arc-ring-2"></div>
+            <div class="arc-ring arc-ring-3"></div>
+            <div class="arc-core"></div>
+          </div>
+        </div>
+        <h2 class="welcome-title">Good to have you back, Prem.</h2>
+        <p class="welcome-subtitle">Your executive assistant is online. What shall we handle today?</p>
+        <div class="welcome-suggestions">
+          <div class="suggestion-chip" data-prompt="What are my upcoming meetings and events for today and tomorrow?">📅 My schedule</div>
+          <div class="suggestion-chip" data-prompt="Search for the latest GST news in India today and summarize top 3 updates with sources.">📰 GST news</div>
+          <div class="suggestion-chip" data-prompt="Read my Gmail inbox — show me unread emails from today.">📧 Check emails</div>
+          <div class="suggestion-chip" data-prompt="Create a Google Meet for tomorrow at 3pm. Ask me for the title and who to invite.">📹 Schedule Meet</div>
+          <div class="suggestion-chip" data-prompt="I want to set a reminder. Ask me what time and what to remind me about.">🔔 Set reminder</div>
+          <div class="suggestion-chip" data-prompt="Show me my LinkedIn dashboard — recent posts and engagement.">💼 LinkedIn</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Typing indicator (Iron Man processing) -->
+    <div class="typing-indicator" id="typingIndicator" style="display:none">
+      <div class="typing-avatar-wrap">
+        <div class="typing-avatar">J</div>
+        <div class="typing-scan"></div>
+      </div>
+      <div class="typing-content">
+        <div class="typing-label" id="typingLabel">Processing…</div>
+        <div class="typing-fx">
+          <div class="typing-reactor">
+            <div class="typing-ring typing-ring-1"></div>
+            <div class="typing-ring typing-ring-2"></div>
+            <div class="typing-core"></div>
+          </div>
+          <div class="typing-hex">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input area -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="messageInput"
+          class="message-input"
+          placeholder="Message Jarvis…"
+          rows="1"
+          maxlength="10000"
+        ></textarea>
+        <div class="input-actions">
+          <button class="attach-btn" title="Attach file" id="attachBtn">📎</button>
+          <button class="send-btn" id="sendBtn" disabled>
+            <!-- Send icon -->
+            <svg class="icon-send" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <!-- Stop icon (shown while processing) -->
+            <svg class="icon-stop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="input-footer">
+        <span class="input-hint">Enter to send · Shift+Enter for new line</span>
+        <span class="char-count" id="charCount">0 / 10000</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════ MODALS ═══════════════════════════════ -->
+  <!-- Confirmation modal -->
+  <div class="modal-overlay" id="confirmModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-icon">⚠</div>
+        <h3 id="confirmTitle">Confirm Action</h3>
+      </div>
+      <div class="modal-body" id="confirmBody"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="confirmCancel">Cancel</button>
+        <button class="btn-confirm" id="confirmOk">Proceed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <input type="file" id="fileInput" style="display:none" multiple />
+  <!-- PWA: register service worker so the app can be installed on phones -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+      });
+    }
+  </script>
+  <!-- Face-login MUST load before app.js so it can set window.__faceLoginPending -->
+  <script src="/static/face-login.js?v=20260429k"></script>
+  <script src="/static/app.js?v=20260429k"></script>
+  <!-- Voice mode loads AFTER app.js so it can hook into window.ws + showToast -->
+  <script src="/static/voice-mode.js?v=20260429k"></script>
+  <script src="/static/gestures.js?v=20260429k"></script>
+</body>
+</html>

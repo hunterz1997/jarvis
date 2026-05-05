@@ -1,0 +1,20 @@
+[Unit]
+Description=Jarvis WhatsApp Bridge (Node.js)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/jarvis/whatsapp_bridge
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/jarvis/wa_bridge.log
+StandardError=append:/opt/jarvis/wa_bridge.log.err
+
+# Tell puppeteer to use system Chromium (ARM-native, already installed)
+Environment=CHROMIUM_PATH=/usr/bin/chromium-browser
+Environment=PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+# ── Secrets ──────────────────────────────────────────────────────
+.env
+
+# ── Browser profile (contains your Zomato login session) ─────────
+zomato_chromium_profile/
+
+# ── Logs ─────────────────────────────────────────────────────────
+*.log

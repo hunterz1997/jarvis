@@ -1,0 +1,76 @@
+# ── Secrets & Environment ────────────────────────────────────────
+.env
+*.env.local
+*.env.production
+deploy/.pkce_session.json
+
+# ── Memory & Database ───────────────────────────────────────────
+memory/jarvis.db
+memory/jarvis.db-shm
+memory/jarvis.db-wal
+memory/whatsapp_session/
+memory/*.db-shm
+memory/*.db-wal
+
+# ── OAuth tokens & secrets (NEVER commit these) ─────────────────
+memory/google_credentials.json
+memory/google_client_secret.json
+memory/microsoft_credentials.json
+memory/linkedin_token.json
+memory/*.token
+memory/*.token.json
+
+# ── Logs ────────────────────────────────────────────────────────
+logs/
+*.log
+startup.log
+startup_err.log
+startup_err2.log
+startup_out2.log
+startup_test.log
+logsstartup.log
+wa_bridge.log
+wa_bridge.log.err
+
+# ── TLS Certificates (Tailscale / local HTTPS) ──────────────────
+*.crt
+*.key
+*.pem
+
+# ── Browser Profile (Zomato MCP Playwright cache) ───────────────
+browser_profile/
+zomato_chromium_profile/
+mcp_servers/zomato/zomato_chromium_profile/
+mcp_servers/zomato/.env
+
+# ── Node ────────────────────────────────────────────────────────
+whatsapp_bridge/node_modules/
+whatsapp_bridge/.wwebjs_auth/
+whatsapp_bridge/.wwebjs_cache/
+node_modules/
+
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── OS / IDE ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/settings.json
+.vscode/*.json
+.idea/
+*.swp
+*.swo
+
+# ── Claude Code local settings ──────────────────────────────────
+.claude/settings.local.json

@@ -1,0 +1,21 @@
+{
+  "name": "J.A.R.V.I.S",
+  "short_name": "JARVIS",
+  "description": "Just A Rather Very Intelligent System — your personal AI executive assistant.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a0f08",
+  "theme_color": "#d97706",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/static/jarvis_icon.ico",
+      "sizes": "16x16 32x32 48x48 64x64 128x128 256x256",
+      "type": "image/x-icon"
+    }
+  ]
+}
