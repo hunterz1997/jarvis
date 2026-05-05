@@ -150,7 +150,7 @@ Privacy is not a feature. It is the foundation on which everything else should b
 
 ## Build Your Own Jarvis
 
-The full project is available on GitHub: **github.com/prem-joshi/jarvis**
+The full project is available on GitHub: **github.com/hunterz1997/jarvis**
 
 Everything is documented: setup guides, API connection walkthroughs, the WhatsApp bridge, the MCP tool architecture. If you are a developer, the codebase is yours to fork, extend, and adapt. If you are a business professional curious about running it, the README will walk you through setup step by step.
 
